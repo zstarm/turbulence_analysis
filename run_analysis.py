@@ -4,7 +4,6 @@ import pandas as pd
 import os
 import numpy as np
 import argparse
-import matplotlib.pyplot as plt
 from statsmodels.tsa.stattools import acf
 
 def get_velStats(filename: str, sep=' ', tpos=0,upos=1,vpos=2,wpos=3):
@@ -131,7 +130,7 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=' '
         set.
     '''
 
-    print("PERFORMING AUTCORRELATION OF VARIABLE: {var}" )
+    print(f"PERFORMING AUTCORRELATION OF VARIABLE: {var}" )
     data = pd.read_csv(filename, sep=sep, header = 0)
     mean_val = data[var].mean(axis=0)
     x = (data[var] - mean_val).to_numpy()
@@ -253,7 +252,7 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
     eta = ((nu**3) / eps_micro)**(0.25)
     
     sheet2_row_names = [ftauE,fT,flambdaf, fclambdaf, fReLambda, feps, feta] 
-    sheet2_data = { 'Value' : [microscale, macroscale,Ubar*microscale, Ubar*macroscale, Re_lambda, eps_micro, eta] , 'Units' : ['s','s','m', 'm', '-', 'm^2/s^3', 'm'], 'Method/Notes' : ['Parabola Root', 'Trapezoidal Integration', 'Microscale Re', 'Dissipation based on microscales', 'Kolmogorov length scale' ]}
+    sheet2_data = { 'Value' : [microscale, macroscale,Ubar*microscale, Ubar*macroscale, Re_lambda, eps_micro, eta] , 'Units' : ['s','s','m', 'm', '-', 'm^2/s^3', 'm'], 'Method/Notes' : ['Parabola Root', 'Trapezoidal Integration','Taylor Frozen Turbulence Hypothesis', 'Taylor Frozen Turbulence Hypothesis', 'Microscale Re', 'Dissipation based on microscales', 'Kolmogorov length scale' ]}
     
     sheet2_df = pd.DataFrame(sheet2_data, index=sheet2_row_names)
 
@@ -297,14 +296,16 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
 
     avg_acf = acfs.mean(axis=1)
     avg_U = Ubar.mean()
-    avg_rss = uu.mean(axis=1)
+    avg_rss = rss.mean(axis=1)
 
     #freqE11acf, E11_acf = getE11(ensemble_avg, uu)
     #freqE11psd, E11_psd = getE11(ensemble_avg, uu)
     #write_E11(fnameE11, freq=freqE11acf, E11=E11_acf)
 
     # Fitting a parabola around f(r=0), 3pt fit (function is symmetric)
-    coeffs = get_parabolaCoeffs([-1*tau[1], tau[0], tau[1]], [avg_acf[1],avg_acf[0],avg_acf[1]])
+    print(avg_acf)
+    print(tau)
+    coeffs = get_parabolaCoeffs(np.array([-1*tau[1], tau[0], tau[1]]), np.array([avg_acf[1],avg_acf[0],avg_acf[1]]))
     write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=50) 
 
     microscale = np.roots(coeffs)[0]
@@ -341,7 +342,7 @@ def main(files, Us: float, Ls: float, l0: float):
 
             print("STATUS: Finished analysis for all files in directiory \"", current_folder,"\"")
             print("Number of datafiles used = ", current_count)
-            process_ensemble(acfs, tau, meanV, meanRSS,l0, current_folder)
+            process_ensembleData(acfs, tau, meanV, meanRSS,l0, current_folder)
 
             #reset ensemble variables to be used for the next folder
             acfs = None
@@ -353,9 +354,9 @@ def main(files, Us: float, Ls: float, l0: float):
         if(current_folder == None):
             current_folder = head
 
-        tau, f_r, Ubar = get_autocorrelation(f, 'Vx') 
+        tau, f_r, Ubar = get_autocorr(f, 'Vx', time="Time") 
         Ubar = Ubar*Us
-        uu,vv,ww,uv,uw,vw,tke = get_velocity_statistics(f)
+        uu,vv,ww,uv,uw,vw,tke = get_velStats(f)
         uu = uu*Us*Us
         vv = vv*Us*Us
         ww = ww*Us*Us
@@ -403,7 +404,7 @@ def main(files, Us: float, Ls: float, l0: float):
         print("STATUS: Finished analysis for all files in directiory \"", current_folder,"\"")
         print("Number of datafiles used = ", current_count)
         
-        process_ensemble(acfs, tau, meanV, meanRSS,l0)
+        process_ensembleData(acfs, tau, meanV, meanRSS,l0,current_folder)
 
 
 if __name__ == "__main__":
@@ -412,8 +413,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--files', nargs='*', help='filenames of the velocity timeseries with Time, Vx, Vy, Vz variables')
     parser.add_argument('--l0', type=float, help='Reference eddy length scale (i.e. vortex width) in m')
-    parser.add_argument('--Us', type=float, default=1.0, help='If files are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s')
-    parser.add_argument('--Ls', type=float, default=1.0, help='If files are nondimensional, provide reference length scale (i.e. model length) in m')
+    parser.add_argument('--Us', type=float, default=1.0, help='If files are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s. Us = 1 (i.e. dimensional) by default')
+    parser.add_argument('--Ls', type=float, default=1.0, help='If files are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
 
     args = parser.parse_args()
 

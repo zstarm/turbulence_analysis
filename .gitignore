@@ -1,3 +1,10 @@
+#PERSONALLY ADDED FILES
+example_data/ensemble_autocorrelation.dat
+example_data/*.xlsx
+
+
+
+#AUTO GENERATED BELOW
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
