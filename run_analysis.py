@@ -1,12 +1,97 @@
 from scipy import signal
 from scipy.integrate import trapezoid
+from scipy.fft import fft,fftfreq
+from scipy.signal import hann
+from scipy.integrate import quad
 import pandas as pd
 import os
 import numpy as np
 import argparse
 from statsmodels.tsa.stattools import acf
 
-def get_velStats(filename: str, sep=' ', tpos=0,upos=1,vpos=2,wpos=3):
+def get_FFTOfACF(acf: np.ndarray, fs=None):
+    '''
+        Performs the FFT of the autocorrelation function.
+        Args
+            acf: ensemble average of the ACF
+            fs: sample rate to return a frequency vector
+                None is returned if no sample rate is provided
+
+        This FFT uses a Hanning windowing function to reduce
+        spectral leakage. An amplitude correction factor is 
+        used to correct for the windowing effects on the output
+    '''
+
+    N = len(acf)
+    wind = hann(N)
+    X = acf*wind
+    #correction = np.sum(wind*wind) / N
+    correction = np.sum(wind) / N
+
+    fft_x = fft(X)
+    if(fs is not None):
+        freq = fftfreq(N,d=1/fs)
+        freq = freq[:N//2]
+    else:
+        freq = None
+
+    fft_x = np.abs(fft_x/correction)
+    fft_x = (2./N)*fft_x[:N//2]
+
+    return freq,fft_x
+
+
+def modelIntegrand(kappa,k1,eps,L,eta,cL,ceta):
+    A = (1-(k1**2)/(kappa**2)) / kappa
+    C = 1.5
+    p0 = 2
+    beta = 5.2
+    fL = ((kappa*L)/(((kappa*L)**2 + cL)**0.5))**(5./3.+p0)
+    B = -1*beta*(((kappa*eta)**4 + ceta**4)**0.25 - ceta)
+    feta = np.exp(B)
+
+    mod = C*fL*feta*(eps**(2./3.))*(kappa**(-5./3.))
+
+    return A*mod
+
+def get_modelSpectra(tke:float,eps:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKappa=20000,N=15000):
+    '''
+        Generates a 1D model spectrum from provided tke and dissipation 
+        parameters. CL and Ceta parameters can be tuned to improve
+        the model agreement.
+        Args
+            tke: kinetic energy input
+            eps: dissipation rate input
+            CL/Ceta: Model parameters. Default parameters work well
+                     for high Re flows. Tune to agree with tke and eps
+            startKappa: starting wavenumber
+            endKappa: final wavenumber value to integrate to
+            N: how many points to include for output array
+
+        Number of loop iterations is directly determined by N/endKappa
+    '''
+
+
+    print(f"GENERATING MODEL SPECTRUM. THIS MAY TAKE A WHILE")
+    nu = 1.1818e-6   #assume typical viscosity of water (15 C)
+    L = (tke**(1.5)) / eps
+    eta = ((nu**3)/eps)**0.25
+
+    E11_model = np.empty(N)
+    k1 = np.logspace(np.log10(startKappa),np.log10(endKappa),N)
+    idx = 0
+    for i in k1:
+        #print(k1,eps,L,eta,CL,Ceta)
+        E11_model[idx] = quad(modelIntegrand,i,endKappa,args=(i,eps,L,eta,CL,Ceta))[0]
+        idx = idx + 1
+        
+
+    integral_E11 = trapezoid(E11_model,x=k1)
+    
+    return k1,E11_model,integral_E11
+
+
+def get_velStats(filename: str, sep='[,\s]', tpos=0,upos=1,vpos=2,wpos=3):
     '''
         Use to extract Reynolds stresses and turbulent kinetic energy
         from the time series file. 
@@ -20,7 +105,7 @@ def get_velStats(filename: str, sep=' ', tpos=0,upos=1,vpos=2,wpos=3):
     '''
         
     print(f'READING DATASET: {filename}')
-    data = pd.read_csv(filename, sep=' ', header = 0)
+    data = pd.read_csv(filename, sep=sep, header = 0)
     col_names = data.columns.tolist()
     vel_components = [col_names[upos],col_names[vpos], col_names[wpos]]
     uu = None
@@ -39,17 +124,17 @@ def get_velStats(filename: str, sep=' ', tpos=0,upos=1,vpos=2,wpos=3):
             x = (data[u] - mean_u).to_numpy()
             sm = lambda a : np.mean(a**2)
             if(i == j):
-                if(u == 'Vx'):
+                if(u == vel_components[0]):
                     if uu is None:
                         uu = sm(x)
                     else:
                         print("ERROR")
-                elif(v == 'Vy'):
+                elif(v == vel_components[1]):
                     if vv is None:
                         vv = sm(x)
                     else:
                         print("ERROR")
-                elif(v == 'Vz'):
+                elif(v == vel_components[2]):
                     if ww is None:
                         ww = sm(x)
                     else:
@@ -57,21 +142,21 @@ def get_velStats(filename: str, sep=' ', tpos=0,upos=1,vpos=2,wpos=3):
             else:
                 mean_v = data[v].mean(axis=0)
                 y = (data[v] - mean_v).to_numpy()
-                if(u == "Vx"):
-                    if(v == "Vy"):
+                if(u == vel_components[0]):
+                    if(v == vel_components[1]):
                         if uv is None:
                             uv = np.mean(x*y)
                         else:
                             print("ERROR")
-                    elif(v == "Vz"):
+                    elif(v == vel_components[2]):
                         if uw is None:
                             uw = np.mean(x*y)
                         else:
                             print("ERROR")
                     else:
                         print("ERROR")
-                elif(u == "Vy"):
-                    if(v == "Vz"):
+                elif(u == vel_components[1]):
+                    if(v == vel_components[2]):
                         if vw is None:
                             vw = np.mean(x*y)
                         else:
@@ -106,6 +191,9 @@ def parabola(x,a,b,c):
     '''
         use to return a y-value from the 3 coefficient values
         defining a parabola and a given an x value. 
+        Args:
+            x: independent data point value to evaluate parabola
+            a,b,c: parabola coefficients
 
         This is used output osculating parabola with the
         autocorrelation function at f(r=0) for an estimate
@@ -113,32 +201,37 @@ def parabola(x,a,b,c):
     '''
     return a*x**2 + b*x + c
 
-def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=' '):
+def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep='[,\s]'):
     '''
         This function performs the autocorrelation given a 
         timeseries of a specified variable.
-
-        Pass in the file name and variable name (or index)
-        for the delimited data file.
-
-        set 'fft' to true to use the convolution method
-        rather than direct autocorrelation method.
-
-        Use either 'fs' (sample rate) or 'time' (time
-        column name or index) to return the calcualted
-        temporal lags. 'None' is returned if neither is
-        set.
+        Args:
+            filename: data file name to process
+            var: variable name or index to perform the autocorr on
+            fft: bool switch for using direct or convolution method
+            time: index or var name of the time column for calculating time lags
+            fs: alternate way to calculate time lags using sampling rate
+            sep: delimiter option
     '''
 
     print(f"PERFORMING AUTCORRELATION OF VARIABLE: {var}" )
     data = pd.read_csv(filename, sep=sep, header = 0)
-    mean_val = data[var].mean(axis=0)
-    x = (data[var] - mean_val).to_numpy()
+    col_names = data.columns.tolist()
+    if(isinstance(var,int)):
+        ivar = col_names[var]
+    else:
+        ivar = var
+    mean_val = data[ivar].mean(axis=0)
+    x = (data[ivar] - mean_val).to_numpy()
     f_r = acf(x, fft=fft, nlags=len(x))
 
     tau = None
     if(time is not None):
-        t = data[time].to_numpy()
+        if(isinstance(time,int)):
+            itime = col_names[time]
+        else:
+            itime = time
+        t = data[itime].to_numpy()
         tau = np.linspace(0,len(f_r)*(t[1]-t[0]), len(f_r))
     elif(fs is not None):
         tau = np.linspace(0,len(f_r)/fs, len(f_r))
@@ -154,6 +247,12 @@ def write_autocorr(filename: str, tau, fr, coeffs, tau_end=10, n= 50):
         Writes out the autocorrelation function using tecplot ascii point format.
         This is equvilant to a deliminted text file if the file header and zone 
         headers are ignored.
+        Args
+            filename: output file name
+            tau: array of time lags
+            fr: autocorrelation at the time lags
+            tau_end: final lag vale (index of tau) for plotting the osculating parabola
+            n: how many data points to use for parabola plot
 
         The osculating parabola is also outputed up to a specified lag and n points
         (50 by deffault).
@@ -181,13 +280,21 @@ def write_autocorr(filename: str, tau, fr, coeffs, tau_end=10, n= 50):
            of.write(f"{x[i]} {y[i]}\n") 
         of.close()
 
-def write_spectra(filename: str, f: np.ndarray, Y: np.ndarray, Yname: str, fname: str):
+def write_spectra(filename: str, f: np.ndarray, Y: np.ndarray, fname: str, Yname: str):
     '''
         Writes out a tecplot ascii point formatted data filea
         of a spectrum in frequency/wavenumber domain. This can 
         be used multiple times to output both FFTs of the 
         velocity, FFT of the autocorrelation, E11, or E11 with 
         Kolmogorov scalings
+        Args
+            filename: output file name
+            f: frequency/wavenumber array
+            Y: spectrum amplitude array
+            Yname: name of spectrum var for output file
+            fname: name of freq/wavenumber var for output file
+
+        
     '''
 
     print(f"STATUS: Writing out ensemble averaged {Yname} to \"{filename}\"")
@@ -204,6 +311,13 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
         writes an excel tables for both the micro and macro scales
         provided the mean axial core velocity, longitudinal RSS,
         vortex length scale (l0), and Taylor micro and macro scales
+        Args
+            Ubar: mean core velocity
+            uu: mean uu Reynolds stress (longitudinal direction of vortex)
+            k: tke value
+            l0: vortex width characteristic length scale
+            micro/macroscale: Taylor micro and macroscale
+            fname: output excel filename
     '''
 
     nu = 1.1818e-6   #assume typical viscosity of water (15 C)
@@ -248,7 +362,7 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
     #SHEET 2 - MICROSCALES
 
     Re_lambda = microscale / np.sqrt(2) * uprime / nu
-    eps_micro = 30 / (microscale**2) * (uprime**2) * nu
+    eps_micro = 30 / ((Ubar*microscale)**2) * (uprime**2) * nu
     eta = ((nu**3) / eps_micro)**(0.25)
     
     sheet2_row_names = [ftauE,fT,flambdaf, fclambdaf, fReLambda, feps, feta] 
@@ -263,6 +377,12 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
         sheet2_df.to_excel(exWriter, sheet_name='Microscales')
 
 def write_rss2excel(avg_rss,fname):
+    '''
+        Writes out table of RSS values to excel file
+        Args
+            avg_rss: 2D array of the ensemble averaged RSS components and tke
+            fname: output excel filename
+    '''
     
     rss_row_names = ['uu', 'vv', 'ww', 'uv', 'uw', 'vw', 'tke'] 
     rss_data = { 'Value' : avg_rss, 'Units' : ['m^2/s^2','m^2/s^2','m^2/s^2','m^2/s^2','m^2/s^2','m^2/s^2','m^2/s^2',]}
@@ -291,21 +411,25 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
             cf: current folder used for saving excel report in a specified data folder
     '''
 
-    fname = cf+"/ensemble_autocorrelation.dat"
-    #fnameE11 = current_folder+"/E11_at_"+indices+"_fc_"+fc+".dat"
-
     avg_acf = acfs.mean(axis=1)
     avg_U = Ubar.mean()
     avg_rss = rss.mean(axis=1)
 
-    #freqE11acf, E11_acf = getE11(ensemble_avg, uu)
-    #freqE11psd, E11_psd = getE11(ensemble_avg, uu)
-    #write_E11(fnameE11, freq=freqE11acf, E11=E11_acf)
+    
+    freq, RE = get_FFTOfACF(avg_acf, fs=1/(tau[1]-tau[0]))
+    fname = cf+"/ensemble_RE.dat"
+    write_spectra(fname,freq,RE,'freq (Hz)', 'RE (s)')
+    fname = cf+"/ensemble_E11hat.dat"
+    E11hat = RE*2.*avg_rss[0]
+    write_spectra(fname,freq,E11hat,'freq (Hz)', 'E11_hat (m^2/s)')
+    fname = cf+"/ensemble_E11.dat"
+    wavenumber = freq*2.*np.pi / avg_U
+    E11 = E11hat*avg_U / (2.*np.pi)
+    write_spectra(fname,wavenumber,E11,'kappa (1/m)', 'E11 (m^3/s^2)')
 
     # Fitting a parabola around f(r=0), 3pt fit (function is symmetric)
-    print(avg_acf)
-    print(tau)
     coeffs = get_parabolaCoeffs(np.array([-1*tau[1], tau[0], tau[1]]), np.array([avg_acf[1],avg_acf[0],avg_acf[1]]))
+    fname = cf+"/ensemble_autocorrelation.dat"
     write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=50) 
 
     microscale = np.roots(coeffs)[0]
@@ -322,8 +446,29 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
     excelName = cf+"/turbulence_table_report.xlsx"
     write_reportExcel(avg_U, avg_rss, l0, microscale, macroscale,excelName)
 
+    eps = (avg_rss[-1]**(3/2)) / l0 #macroscale dissipation
+    k1,E11_model,intE11 = get_modelSpectra(avg_rss[-1],eps)
+    print(f"Comparing integral of E11 to uu: {intE11/avg_rss[0]}")
+    fname = cf+"/modelE11_macroEps.dat"
+    write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Macro Model E11 (m^3/s^2)')
+    
+    nu = 1.1818e-6   #assume typical viscosity of water (15 C)
+    eps = 30 / ((avg_U*microscale)**2) * (avg_rss[0]) * nu #microscale dissipation
+    k1,E11_model,intE11 = get_modelSpectra(avg_rss[-1],eps)
+    print(f"Comparing integral of E11 to uu: {intE11/avg_rss[0]}")
+    fname = cf+"/modelE11_microEps.dat"
+    write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Micro Model E11 (m^3/s^2)')
 
-def main(files, Us: float, Ls: float, l0: float): 
+
+def main(files, Us: float, Ls: float, l0: float, fs: float): 
+    '''
+        Main program execution
+        Args
+            files: list of files to include for ensemble analysis
+            Us: Velocity scaling to use
+            Ls: Length scaling to use 
+            l0: characteristic eddy length scale (i.e. nominal vortex width)
+    '''
     print("MAIN() CALLED")
 
     current_count = 0
@@ -354,9 +499,13 @@ def main(files, Us: float, Ls: float, l0: float):
         if(current_folder == None):
             current_folder = head
 
-        tau, f_r, Ubar = get_autocorr(f, 'Vx', time="Time") 
+        tau, f_r, Ubar = get_autocorr(f, "Vx", time='Time') 
+        if(tau is None):
+            tau = np.linspace(0,fs*len(f_r),len(f_r))
+        
+
         Ubar = Ubar*Us
-        uu,vv,ww,uv,uw,vw,tke = get_velStats(f)
+        uu,vv,ww,uv,uw,vw,tke = get_velStats(f,tpos=0,upos=1,vpos=2,wpos=3)
         uu = uu*Us*Us
         vv = vv*Us*Us
         ww = ww*Us*Us
@@ -391,8 +540,8 @@ def main(files, Us: float, Ls: float, l0: float):
                     tau = tau[0:newSize]
 
             acfs = np.concatenate((acfs,f_r), axis=1)
-            meanV = np.concatenate((meanV,Ubar), axis=0)
-            newRSS = np.arrray([uu,vv,ww,uv,uw,vw,tke])
+            meanV = np.concatenate((meanV,np.array([Ubar])), axis=0)
+            newRSS = np.array([uu,vv,ww,uv,uw,vw,tke]).reshape(7,1)
             meanRSS = np.concatenate((meanRSS,newRSS),axis=1)
 
         print("Autocorrelations ensemble shape: ", acfs.shape)
@@ -415,7 +564,8 @@ if __name__ == "__main__":
     parser.add_argument('--l0', type=float, help='Reference eddy length scale (i.e. vortex width) in m')
     parser.add_argument('--Us', type=float, default=1.0, help='If files are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s. Us = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ls', type=float, default=1.0, help='If files are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
+    parser.add_argument('--fs', type=float, default=1.0, help='A sampling rate if no time column is included in data files')
 
     args = parser.parse_args()
 
-    main(args.files, args.Us, args.Ls, args.l0)
+    main(args.files, args.Us, args.Ls, args.l0,args.fs)
