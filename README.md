@@ -9,7 +9,7 @@
 A Python code for extracting turbulence characteristics from the velocity time series at a vortex core. 
 
 ## Notes:
-This program may require the use of basic Python packages, such as NumPy, Pandas, SciPy, etc. These should be easily installed using the Pip package manager. 
+This program may require the use of basic Python packages, such as NumPy, Pandas, SciPy, etc. These should be easily installed using the Pip package manager. A requirements.txt file has been provided. Use the command 'pip install -r requirements.txt' to install the depencies. You can add these to a virtual environment for python if desired.
 
 Additionally, this program was originally written to be run from the command line using the argument parser package for Python. The arguments can be viewed using '--help' on the command line. If it is desired for the code to be run from an IDE, please modify the "if __name__ == "__main__" block as necessary or set up the IDE to provide the CLI arguments. 
 
