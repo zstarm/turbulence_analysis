@@ -1,7 +1,7 @@
 from scipy import signal
 from scipy.integrate import trapezoid
 from scipy.fft import fft,fftfreq
-from scipy.signal import hann
+from scipy.signal import hann,correlate
 from scipy.integrate import quad
 import pandas as pd
 import os
@@ -22,11 +22,12 @@ def get_FFTOfACF(acf: np.ndarray, fs=None):
         used to correct for the windowing effects on the output
     '''
 
+    print(fs)
     N = len(acf)
     wind = hann(N)
     X = acf*wind
-    #correction = np.sum(wind*wind) / N
-    correction = np.sum(wind) / N
+    correction = np.sum(wind*wind) / N
+    #correction = np.sum(wind) / N
 
     fft_x = fft(X)
     if(fs is not None):
@@ -223,7 +224,9 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep='[,
         ivar = var
     mean_val = data[ivar].mean(axis=0)
     x = (data[ivar] - mean_val).to_numpy()
-    f_r = acf(x, fft=fft, nlags=len(x))
+    #f_r = acf(x, fft=fft, nlags=len(x))
+    f_r = correlate(x,x,mode='full')
+    f_r = f_r/f_r[len(f_r)//2]
 
     tau = None
     if(time is not None):
@@ -233,8 +236,10 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep='[,
             itime = time
         t = data[itime].to_numpy()
         tau = np.linspace(0,len(f_r)*(t[1]-t[0]), len(f_r))
+        tau = tau - tau[len(f_r)//2]
     elif(fs is not None):
         tau = np.linspace(0,len(f_r)/fs, len(f_r))
+        tau = tau - tau[len(f_r)//2]
     else:
         print("WARNING: no time lags are being returned... This may cause undesired behavior when outputting results") 
 

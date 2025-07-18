@@ -1,8 +1,8 @@
 #PERSONALLY ADDED FILES
-example_data/ensemble_autocorrelation.dat
-example_data/*.xlsx
-example_data/*.dat
-example_data/*.lay
+example_data/
+#example_data/*.xlsx
+#example_data/*.dat
+#example_data/*.lay
 
 
 
