@@ -22,7 +22,7 @@ def get_FFTOfACF(acf: np.ndarray, fs=None):
         used to correct for the windowing effects on the output
     '''
 
-    print(fs)
+    print(f"PERFORMING FFT OF SIGNAL WITH SAMPLING RATE: {fs}")
     N = len(acf)
     wind = hann(N)
     X = acf*wind
@@ -442,7 +442,7 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
     # Fitting a parabola around f(r=0), 3pt fit (function is symmetric)
     coeffs = get_parabolaCoeffs(np.array([-1*tau[1], tau[0], tau[1]]), np.array([avg_acf[1],avg_acf[0],avg_acf[1]]))
     fname = cf+"/ensemble_autocorrelation.dat"
-    write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=50) 
+    write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=50,tau_end=20) 
 
     microscale = np.roots(coeffs)[0]
     zerocrossing = np.where(np.diff(np.sign(avg_acf)))[0][0]  #get first zero crossing index
@@ -459,7 +459,7 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
     write_reportExcel(avg_U, avg_rss, l0, microscale, macroscale,excelName)
 
     k1,E11_model,intE11 = get_modelSpectra(avg_rss[-1],l0)
-    print(f"Comparing integral of E11 to uu: {intE11/avg_rss[0]}")
+    print(f"\tOutputting the integral of E11 over uu: {intE11/avg_rss[0]}")
     fname = cf+"/ensemble_modelE11.dat"
     write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Model E11 (m^3/s^2)')
 
@@ -519,13 +519,13 @@ def main(files, Us: float, Ls: float, l0: float, fs: float):
         if(current_folder == None):
             current_folder = head
 
-        tau, f_r, Ubar = get_autocorr(f, "Vx", time='Time') 
+        tau, f_r, Ubar = get_autocorr(f, "Vx", time='Time',sep='\t') 
         if(tau is None):
             tau = np.linspace(0,fs*len(f_r),len(f_r))
         
 
         Ubar = Ubar*Us
-        uu,vv,ww,uv,uw,vw,tke = get_velStats(f,tpos=0,upos=1,vpos=2,wpos=3)
+        uu,vv,ww,uv,uw,vw,tke = get_velStats(f,tpos=0,upos=1,vpos=2,wpos=3,sep='\t')
         uu = uu*Us*Us
         vv = vv*Us*Us
         ww = ww*Us*Us
@@ -564,14 +564,14 @@ def main(files, Us: float, Ls: float, l0: float, fs: float):
             newRSS = np.array([uu,vv,ww,uv,uw,vw,tke]).reshape(7,1)
             meanRSS = np.concatenate((meanRSS,newRSS),axis=1)
 
-        print("Autocorrelations ensemble shape: ", acfs.shape)
+        print("ARRAY SHAPE OF AUTOCORRECTON: ", acfs.shape)
 
         current_count = current_count + 1
         ##END OF FILE ITERATION LOOP
 
     if(current_folder != None):
         print("STATUS: Finished analysis for all files in directiory \"", current_folder,"\"")
-        print("Number of datafiles used = ", current_count)
+        print("\tNumber of datafiles used = ", current_count)
         
         process_ensembleData(acfs, tau, meanV, meanRSS,l0,current_folder)
 
