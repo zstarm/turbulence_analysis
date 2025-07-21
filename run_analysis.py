@@ -26,8 +26,7 @@ def get_FFTOfACF(acf: np.ndarray, fs=None):
     N = len(acf)
     wind = hann(N)
     X = acf*wind
-    correction = np.sum(wind*wind) / N
-    #correction = np.sum(wind) / N
+    correction = np.sum(wind) / N
 
     fft_x = fft(X)
     if(fs is not None):
@@ -36,8 +35,8 @@ def get_FFTOfACF(acf: np.ndarray, fs=None):
     else:
         freq = None
 
-    fft_x = np.abs(fft_x/correction)
-    fft_x = (2./N)*fft_x[:N//2]
+    fft_x = (2./N)*np.abs(fft_x/correction)
+    fft_x = fft_x[:N//2]
 
     return freq,fft_x
 
@@ -55,7 +54,7 @@ def modelIntegrand(kappa,k1,eps,L,eta,cL,ceta):
 
     return A*mod
 
-def get_modelSpectra(tke:float,eps:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKappa=20000,N=15000):
+def get_modelSpectra(tke:float,L:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKappa=20000,N=15000):
     '''
         Generates a 1D model spectrum from provided tke and dissipation 
         parameters. CL and Ceta parameters can be tuned to improve
@@ -75,7 +74,7 @@ def get_modelSpectra(tke:float,eps:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKapp
 
     print(f"GENERATING MODEL SPECTRUM. THIS MAY TAKE A WHILE")
     nu = 1.1818e-6   #assume typical viscosity of water (15 C)
-    L = (tke**(1.5)) / eps
+    eps = (tke**(3/2)) / L
     eta = ((nu**3)/eps)**0.25
 
     E11_model = np.empty(N)
@@ -90,9 +89,16 @@ def get_modelSpectra(tke:float,eps:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKapp
     integral_E11 = trapezoid(E11_model,x=k1)
     
     return k1,E11_model,integral_E11
+def get_kolmogorovScaling(k1,E11,tke,eps):
+    nu = 1.1818e-6
+    eta = ((nu**3)/eps)**(0.25)
+    k1eta = eta*k1
 
+    kolm = E11*(eps*(nu**5))**(-0.25)
 
-def get_velStats(filename: str, sep='[,\s]', tpos=0,upos=1,vpos=2,wpos=3):
+    return k1eta,kolm
+
+def get_velStats(filename: str, sep=' ', tpos=0,upos=1,vpos=2,wpos=3):
     '''
         Use to extract Reynolds stresses and turbulent kinetic energy
         from the time series file. 
@@ -130,12 +136,12 @@ def get_velStats(filename: str, sep='[,\s]', tpos=0,upos=1,vpos=2,wpos=3):
                         uu = sm(x)
                     else:
                         print("ERROR")
-                elif(v == vel_components[1]):
+                elif(u == vel_components[1]):
                     if vv is None:
                         vv = sm(x)
                     else:
                         print("ERROR")
-                elif(v == vel_components[2]):
+                elif(u == vel_components[2]):
                     if ww is None:
                         ww = sm(x)
                     else:
@@ -202,7 +208,7 @@ def parabola(x,a,b,c):
     '''
     return a*x**2 + b*x + c
 
-def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep='[,\s]'):
+def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=' '):
     '''
         This function performs the autocorrelation given a 
         timeseries of a specified variable.
@@ -225,8 +231,9 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep='[,
     mean_val = data[ivar].mean(axis=0)
     x = (data[ivar] - mean_val).to_numpy()
     #f_r = acf(x, fft=fft, nlags=len(x))
-    f_r = correlate(x,x,mode='full')
-    f_r = f_r/f_r[len(f_r)//2]
+    f_r = correlate(x,x,mode='full',method='direct')
+    f_r = f_r[len(f_r)//2:-1]
+    f_r = f_r/f_r[0]
 
     tau = None
     if(time is not None):
@@ -236,10 +243,10 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep='[,
             itime = time
         t = data[itime].to_numpy()
         tau = np.linspace(0,len(f_r)*(t[1]-t[0]), len(f_r))
-        tau = tau - tau[len(f_r)//2]
+        #tau = tau - tau[len(f_r)//2]
     elif(fs is not None):
         tau = np.linspace(0,len(f_r)/fs, len(f_r))
-        tau = tau - tau[len(f_r)//2]
+        #tau = tau - tau[len(f_r)//2]
     else:
         print("WARNING: no time lags are being returned... This may cause undesired behavior when outputting results") 
 
@@ -355,7 +362,7 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
     eps = (k**(3/2)) / L
     ReL = u0*L / (nu)
     BM_microscale = np.sqrt(20)*L / np.sqrt(ReL)
-    BM_Rlambda = np.sqrt(2)*uprime*BM_microscale / nu
+    BM_Rlambda = uprime*BM_microscale / (np.sqrt(2)*nu)
     BM_eta = ((nu**3) / eps)**(0.25)
 
     sheet1_row_names = [fU, fuu, fk, fup, fu0, fl0, fL, feps, fReL, fBMLambdaf, fBMReLambda, fBMeta] 
@@ -448,22 +455,30 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
     area = -0.5*(avg_acf[zerocrossing]**2)/slope
     macroscale=macroscale+area
 
-    excelName = cf+"/turbulence_table_report.xlsx"
+    excelName = cf+"/ensemble_turbulence_table_report.xlsx"
     write_reportExcel(avg_U, avg_rss, l0, microscale, macroscale,excelName)
 
-    eps = (avg_rss[-1]**(3/2)) / l0 #macroscale dissipation
-    k1,E11_model,intE11 = get_modelSpectra(avg_rss[-1],eps)
+    k1,E11_model,intE11 = get_modelSpectra(avg_rss[-1],l0)
     print(f"Comparing integral of E11 to uu: {intE11/avg_rss[0]}")
-    fname = cf+"/modelE11_macroEps.dat"
-    write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Macro Model E11 (m^3/s^2)')
-    
-    nu = 1.1818e-6   #assume typical viscosity of water (15 C)
-    eps = 30 / ((avg_U*microscale)**2) * (avg_rss[0]) * nu #microscale dissipation
-    k1,E11_model,intE11 = get_modelSpectra(avg_rss[-1],eps)
-    print(f"Comparing integral of E11 to uu: {intE11/avg_rss[0]}")
-    fname = cf+"/modelE11_microEps.dat"
-    write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Micro Model E11 (m^3/s^2)')
+    fname = cf+"/ensemble_modelE11.dat"
+    write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Model E11 (m^3/s^2)')
 
+    epsMac = (avg_rss[6]**(3/2)) / l0 #macroscale dissipation
+    epsMic = 30 / ((avg_U*microscale)**2) * (avg_rss[0])*(1.1818e-6) 
+    k1eta, macKolmE11 = get_kolmogorovScaling(wavenumber,E11,avg_rss[6],epsMac)
+    k1eta, micKolmE11 = get_kolmogorovScaling(wavenumber,E11,avg_rss[6],epsMic)
+    k1etaMod, macKolmModE11 = get_kolmogorovScaling(k1,E11_model,avg_rss[6],epsMac)
+    k1etaMod, micKolmModE11 = get_kolmogorovScaling(k1,E11_model,avg_rss[6],epsMic)
+    
+    fname = cf+"/ensemble_macro_kolmogorov.dat"
+    write_spectra(fname,k1eta,macKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+    fname = cf+"/ensemble_micro_kolmogorov.dat"
+    write_spectra(fname,k1eta,micKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+
+    fname = cf+"/ensemble_macro_modelKolmogorov.dat"
+    write_spectra(fname,k1etaMod,macKolmModE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+    fname = cf+"/ensemble_micro_modelKolmogorov.dat"
+    write_spectra(fname,k1etaMod,micKolmModE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
 
 def main(files, Us: float, Ls: float, l0: float, fs: float): 
     '''
