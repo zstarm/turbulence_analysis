@@ -9,6 +9,15 @@ import numpy as np
 import argparse
 from statsmodels.tsa.stattools import acf
 
+'''
+
+
+
+'''
+
+#Adjust as needed by the output format of the velocity timeseries
+defaultDelimiter = ' '
+
 def get_FFTOfACF(acf: np.ndarray, fs=None):
     '''
         Performs the FFT of the autocorrelation function.
@@ -33,9 +42,10 @@ def get_FFTOfACF(acf: np.ndarray, fs=None):
         freq = fftfreq(N,d=1/fs)
         freq = freq[:N//2]
     else:
-        freq = None
+        print("WARNING, no fs provided or could be inferred... This may cause erroneous spectra magnitudes")
+        freq = fftfreq(N,d=1/1)
 
-    fft_x = (2./N)*np.abs(fft_x/correction)
+    fft_x = (2./fs)*np.abs(fft_x/correction)
     fft_x = fft_x[:N//2]
 
     return freq,fft_x
@@ -98,7 +108,7 @@ def get_kolmogorovScaling(k1,E11,tke,eps):
 
     return k1eta,kolm
 
-def get_velStats(filename: str, sep=' ', tpos=0,upos=1,vpos=2,wpos=3):
+def get_velStats(filename: str, sep=defaultDelimiter, tpos=0,upos=1,vpos=2,wpos=3):
     '''
         Use to extract Reynolds stresses and turbulent kinetic energy
         from the time series file. 
@@ -208,7 +218,7 @@ def parabola(x,a,b,c):
     '''
     return a*x**2 + b*x + c
 
-def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=' '):
+def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=defaultDelimiter):
     '''
         This function performs the autocorrelation given a 
         timeseries of a specified variable.
@@ -276,20 +286,23 @@ def write_autocorr(filename: str, tau, fr, coeffs, tau_end=10, n= 50):
         x=np.linspace(0, 0.1, n)
         tau = np.zeros(len(fr))
     y=np.empty(n)
+    analytic=np.empty(n)
     a,b,c = coeffs
+    ms = np.roots(coeffs)[0]
     for i in range(0,n):
         y[i] = parabola(x[i],a,b,c)
+        analytic[i] = np.exp(-1*(x[i]**2)/ms**2)
 
     print("STATUS: Writing out ensemble averaged autocorrelation function: \"", filename, "\"")
     with open(filename, 'w') as of:
         of.write("TITLE = \"Autocorrelation Function\"\n")
-        of.write("VARIABLES = \"tau\", \"f(r)\", \"parabola(n_3)\"\n")
-        of.write(f"ZONE T = \"Ensemble Avg. Autocorrelation\" I = {len(tau)}, PASSIVEVARLIST=[3]\n")
+        of.write(f"VARIABLES = \"tau\", \"f(r)\", \"parabola(n_3)\",\"analytic\"\n")
+        of.write(f"ZONE T = \"Ensemble Avg. Autocorrelation\" I = {len(tau)}, PASSIVEVARLIST=[3,4]\n")
         for i in range(0,len(tau)): 
            of.write(f"{tau[i]} {fr[i]}\n") 
-        of.write(f"ZONE T = \"Parbolic Fit of First 3 Points\" I = {50}, PASSIVEVARLIST=[2]\n")
+        of.write(f"ZONE T = \"Parbolic Fit of First 3 Points\" I = {n}, PASSIVEVARLIST=[2]\n")
         for i in range(0,n): 
-           of.write(f"{x[i]} {y[i]}\n") 
+           of.write(f"{x[i]} {y[i]} {analytic[i]}\n") 
         of.close()
 
 def write_spectra(filename: str, f: np.ndarray, Y: np.ndarray, fname: str, Yname: str):
@@ -356,8 +369,8 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
     
     #SHEET 1 - MACROSCALES
     u0 = np.sqrt(k)
-    #uprime = np.sqrt(2/3*k)
-    uprime = np.sqrt(uu)
+    uprime = np.sqrt(2/3*k)
+    #uprime = np.sqrt(uu)
     L = l0 # / 0.43 
     eps = (k**(3/2)) / L
     ReL = u0*L / (nu)
@@ -366,7 +379,9 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
     BM_eta = ((nu**3) / eps)**(0.25)
 
     sheet1_row_names = [fU, fuu, fk, fup, fu0, fl0, fL, feps, fReL, fBMLambdaf, fBMReLambda, fBMeta] 
-    sheet1_data = { 'Value' : [Ubar, uu, k, uprime, u0, l0, L, eps, ReL, BM_microscale, BM_Rlambda,BM_eta] , 'Units' : ['m/s', 'm^2/s^2', 'm^2/s^2', 'm/s', 'm/s', 'm' , 'm', 'm^2/s^3', '-', 'm', '-', 'm'], 'Method/Notes' : ['Mean', 'Mean Square', 'TKE', 'sqrt(tke)', 'sqrt(uu)', 'vortex width', 'same as vortex width', 'dissipation', 'Reynolds number u0*L/nu', 'Benchmark microscale', 'Benchmark lambda Re', 'Benchmark Kolmogorov length scale' ]}
+    sheet1_data = { 'Value' : [Ubar, uu, k, uprime, u0, l0, L, eps, ReL, BM_microscale, BM_Rlambda,BM_eta] , 'Units' : ['m/s', 'm^2/s^2', 'm^2/s^2', 'm/s', 'm/s', 'm' , 'm', 'm^2/s^3', '-', 'm', '-', 'm'], 
+                    'Method/Notes' : ['Mean', 'Mean Square', 'TKE', 'sqrt(tke)', 'sqrt(2/3k)', 'vortex width', 'same as vortex width', 'dissipation', 'Reynolds number u0*L/nu', 'Benchmark microscale', 
+                    'Benchmark lambda Re', 'Benchmark Kolmogorov length scale' ]}
 
     sheet1_df = pd.DataFrame(sheet1_data, index=sheet1_row_names)
 
@@ -378,7 +393,9 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
     eta = ((nu**3) / eps_micro)**(0.25)
     
     sheet2_row_names = [ftauE,fT,flambdaf, fclambdaf, fReLambda, feps, feta] 
-    sheet2_data = { 'Value' : [microscale, macroscale,Ubar*microscale, Ubar*macroscale, Re_lambda, eps_micro, eta] , 'Units' : ['s','s','m', 'm', '-', 'm^2/s^3', 'm'], 'Method/Notes' : ['Parabola Root', 'Trapezoidal Integration','Taylor Frozen Turbulence Hypothesis', 'Taylor Frozen Turbulence Hypothesis', 'Microscale Re', 'Dissipation based on microscales', 'Kolmogorov length scale' ]}
+    sheet2_data = { 'Value' : [microscale, macroscale,Ubar*microscale, Ubar*macroscale, Re_lambda, eps_micro, eta] , 'Units' : ['s','s','m', 'm', '-', 'm^2/s^3', 'm'],
+                    'Method/Notes' : ['Parabola Root', 'Trapezoidal Integration','Taylor Frozen Turbulence Hypothesis', 'Taylor Frozen Turbulence Hypothesis', 'Microscale Re', 
+                    'Dissipation based on microscales', 'Kolmogorov length scale' ]}
     
     sheet2_df = pd.DataFrame(sheet2_data, index=sheet2_row_names)
 
@@ -442,7 +459,7 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
     # Fitting a parabola around f(r=0), 3pt fit (function is symmetric)
     coeffs = get_parabolaCoeffs(np.array([-1*tau[1], tau[0], tau[1]]), np.array([avg_acf[1],avg_acf[0],avg_acf[1]]))
     fname = cf+"/ensemble_autocorrelation.dat"
-    write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=50,tau_end=20) 
+    write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=75,tau_end=40) 
 
     microscale = np.roots(coeffs)[0]
     zerocrossing = np.where(np.diff(np.sign(avg_acf)))[0][0]  #get first zero crossing index
@@ -519,13 +536,13 @@ def main(files, Us: float, Ls: float, l0: float, fs: float):
         if(current_folder == None):
             current_folder = head
 
-        tau, f_r, Ubar = get_autocorr(f, "Vx", time='Time',sep='\t') 
+        tau, f_r, Ubar = get_autocorr(f, "Vx", time='Time') 
         if(tau is None):
             tau = np.linspace(0,fs*len(f_r),len(f_r))
         
 
         Ubar = Ubar*Us
-        uu,vv,ww,uv,uw,vw,tke = get_velStats(f,tpos=0,upos=1,vpos=2,wpos=3,sep='\t')
+        uu,vv,ww,uv,uw,vw,tke = get_velStats(f,tpos=0,upos=1,vpos=2,wpos=3)
         uu = uu*Us*Us
         vv = vv*Us*Us
         ww = ww*Us*Us
