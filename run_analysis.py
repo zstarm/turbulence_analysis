@@ -14,10 +14,6 @@ from statsmodels.tsa.stattools import acf
 
 
 '''
-
-#Adjust as needed by the output format of the velocity timeseries
-defaultDelimiter = ' '
-
 def get_FFTOfACF(acf: np.ndarray, fs=None):
     '''
         Performs the FFT of the autocorrelation function.
@@ -108,7 +104,7 @@ def get_kolmogorovScaling(k1,E11,tke,eps):
 
     return k1eta,kolm
 
-def get_velStats(filename: str, sep=defaultDelimiter, tpos=0,upos=1,vpos=2,wpos=3):
+def get_velStats(filename: str, sep, tpos=0,upos=1,vpos=2,wpos=3, header=0):
     '''
         Use to extract Reynolds stresses and turbulent kinetic energy
         from the time series file. 
@@ -122,19 +118,24 @@ def get_velStats(filename: str, sep=defaultDelimiter, tpos=0,upos=1,vpos=2,wpos=
     '''
         
     print(f'READING DATASET: {filename}')
-    data = pd.read_csv(filename, sep=sep, header = 0)
+    data = pd.read_csv(filename, sep=sep,header=header)
     col_names = data.columns.tolist()
-    vel_components = [col_names[upos],col_names[vpos], col_names[wpos]]
-    uu = None
-    vv = None
-    ww = None
-    uv = None
-    uw = None
-    vw = None
-    tke = None
+    vel_components = []
+    if(len(col_names) < 4):
+        if(tpos >= 0 and upos >= 0 and vpos >= 0 and wpos >= 0):
+            print("ERROR: not enough columns in data file for all three velocity components. Please use turn off missing components and refer to --help command for details")
+            os._exit()
+        else:
+            for i in range(0,len(col_names)):
+                if(i==upos or i==vpos or i==wpos):
+                    vel_components.append(col_names[i])
+    else:
+        vel_components = [col_names[upos],col_names[vpos], col_names[wpos]]
+
+    RSS = [None, None, None, None, None, None]
     print(f'GETTING MEAN VELOCITY STATISTICS OF: {filename}')
-    for i in range(0,3):
-        for j in range(i,3):
+    for i in range(0,len(vel_components)):
+        for j in range(i,len(vel_components)):
             u = vel_components[i]
             v = vel_components[j]
             mean_u = data[u].mean(axis=0)
@@ -142,18 +143,18 @@ def get_velStats(filename: str, sep=defaultDelimiter, tpos=0,upos=1,vpos=2,wpos=
             sm = lambda a : np.mean(a**2)
             if(i == j):
                 if(u == vel_components[0]):
-                    if uu is None:
-                        uu = sm(x)
+                    if RSS[0] is None:
+                        RSS[0] = sm(x)
                     else:
                         print("ERROR")
                 elif(u == vel_components[1]):
-                    if vv is None:
-                        vv = sm(x)
+                    if RSS[1] is None:
+                        RSS[1] = sm(x)
                     else:
                         print("ERROR")
                 elif(u == vel_components[2]):
-                    if ww is None:
-                        ww = sm(x)
+                    if RSS[2] is None:
+                        RSS[2] = sm(x)
                     else:
                         print("ERROR")
             else:
@@ -161,21 +162,21 @@ def get_velStats(filename: str, sep=defaultDelimiter, tpos=0,upos=1,vpos=2,wpos=
                 y = (data[v] - mean_v).to_numpy()
                 if(u == vel_components[0]):
                     if(v == vel_components[1]):
-                        if uv is None:
-                            uv = np.mean(x*y)
+                        if RSS[3] is None:
+                            RSS[3] = np.mean(x*y)
                         else:
                             print("ERROR")
                     elif(v == vel_components[2]):
-                        if uw is None:
-                            uw = np.mean(x*y)
+                        if RSS[4] is None:
+                            RSS[4] = np.mean(x*y)
                         else:
                             print("ERROR")
                     else:
                         print("ERROR")
                 elif(u == vel_components[1]):
                     if(v == vel_components[2]):
-                        if vw is None:
-                            vw = np.mean(x*y)
+                        if RSS[5] is None:
+                            RSS[5] = np.mean(x*y)
                         else:
                             print("ERROR")
                     else:
@@ -185,10 +186,16 @@ def get_velStats(filename: str, sep=defaultDelimiter, tpos=0,upos=1,vpos=2,wpos=
                         print("ERROR")
 
 
-    if tke is None:
-        tke = 0.5*(uu+vv+ww)
+    if(len(vel_components) < 3):
+        for index,r in enumerate(RSS):
+            if r is None:
+                if(index < 3 and index > 0):
+                    RSS[index] = RSS[0] 
+                else:
+                    RSS[index] = 0.0
 
-    return uu,vv,ww,uv,uw,vw,tke
+    tke = 0.5*(RSS[0]+RSS[1]+RSS[2])
+    return RSS[0],RSS[1],RSS[2],RSS[3],RSS[4],RSS[5],tke
 
 def get_parabolaCoeffs(x_data,y_data):
     '''
@@ -218,7 +225,7 @@ def parabola(x,a,b,c):
     '''
     return a*x**2 + b*x + c
 
-def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=defaultDelimiter):
+def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=' ',header=0):
     '''
         This function performs the autocorrelation given a 
         timeseries of a specified variable.
@@ -231,13 +238,13 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=def
             sep: delimiter option
     '''
 
-    print(f"PERFORMING AUTCORRELATION OF VARIABLE: {var}" )
-    data = pd.read_csv(filename, sep=sep, header = 0)
+    data = pd.read_csv(filename, sep=sep, header =header)
     col_names = data.columns.tolist()
     if(isinstance(var,int)):
         ivar = col_names[var]
     else:
         ivar = var
+    print(f"PERFORMING AUTCORRELATION OF VARIABLE: {ivar}" )
     mean_val = data[ivar].mean(axis=0)
     x = (data[ivar] - mean_val).to_numpy()
     #f_r = acf(x, fft=fft, nlags=len(x))
@@ -246,6 +253,8 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=def
     f_r = f_r/f_r[0]
 
     tau = None
+    if(isinstance(time,int) and time < 0):
+        time = None
     if(time is not None):
         if(isinstance(time,int)):
             itime = col_names[time]
@@ -253,12 +262,11 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=def
             itime = time
         t = data[itime].to_numpy()
         tau = np.linspace(0,len(f_r)*(t[1]-t[0]), len(f_r))
-        #tau = tau - tau[len(f_r)//2]
     elif(fs is not None):
-        tau = np.linspace(0,len(f_r)/fs, len(f_r))
-        #tau = tau - tau[len(f_r)//2]
+        tau = np.linspace(0,(len(f_r)-1)/fs, len(f_r))
     else:
-        print("WARNING: no time lags are being returned... This may cause undesired behavior when outputting results") 
+        print("ERROR: no time variable was specified and no sampling rate was give either")
+        os._exit()
 
     f_r = f_r.reshape((-1,1))
     return tau,f_r,mean_val
@@ -279,12 +287,9 @@ def write_autocorr(filename: str, tau, fr, coeffs, tau_end=10, n= 50):
         The osculating parabola is also outputed up to a specified lag and n points
         (50 by deffault).
     '''
-    if tau is not None:
-        x=np.linspace(0,tau[tau_end],n)
-    else:
-        print("WARNING: lags are unprovided. Defaulting to zero")
-        x=np.linspace(0, 0.1, n)
-        tau = np.zeros(len(fr))
+    if(tau_end > (len(tau)-1)):
+        tau_end = len(tau) - 1 
+    x=np.linspace(0,tau[tau_end],n)
     y=np.empty(n)
     analytic=np.empty(n)
     a,b,c = coeffs
@@ -497,7 +502,7 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
     fname = cf+"/ensemble_micro_modelKolmogorov.dat"
     write_spectra(fname,k1etaMod,micKolmModE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
 
-def main(files, Us: float, Ls: float, l0: float, fs: float): 
+def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, header_line, col_info, provided_RSS=None): 
     '''
         Main program execution
         Args
@@ -514,6 +519,8 @@ def main(files, Us: float, Ls: float, l0: float, fs: float):
     meanV = None
     meanRSS = None
     tau = None
+
+    l0 = l0*Ls
 
     for f in files:
         head, tail = os.path.split(f)
@@ -536,20 +543,32 @@ def main(files, Us: float, Ls: float, l0: float, fs: float):
         if(current_folder == None):
             current_folder = head
 
-        tau, f_r, Ubar = get_autocorr(f, "Vx", time='Time') 
-        if(tau is None):
-            tau = np.linspace(0,fs*len(f_r),len(f_r))
+        tau, f_r, Ubar = get_autocorr(f, col_info[1], time=col_info[0], sep=delim,fs=fs) 
+        #if(tau is None):
+        #    print(f"TIME VARIABLE NOT PROVIDED...Deducing time lags using sampling rate")
+        #    tau = np.linspace(0,fs*len(f_r),len(f_r))
+        tau = tau*Ts
         
 
         Ubar = Ubar*Us
-        uu,vv,ww,uv,uw,vw,tke = get_velStats(f,tpos=0,upos=1,vpos=2,wpos=3)
-        uu = uu*Us*Us
-        vv = vv*Us*Us
-        ww = ww*Us*Us
-        uv = uv*Us*Us
-        uw = uw*Us*Us
-        vw = vw*Us*Us
-        tke = tke*Us*Us
+        if(provided_RSS is None):
+            uu,vv,ww,uv,uw,vw,tke = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
+            uu = uu*Us*Us
+            vv = vv*Us*Us
+            ww = ww*Us*Us
+            uv = uv*Us*Us
+            uw = uw*Us*Us
+            vw = vw*Us*Us
+            tke =tke*Us*Us
+        else:
+            uu,_ = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
+            uu = uu*Us*Us
+            vv = provided_RSS[0]*Us*Us
+            ww = provided_RSS[1]*Us*Us
+            uv = provided_RSS[2]*Us*Us
+            uw = provided_RSS[3]*Us*Us
+            vw = provided_RSS[4]*Us*Us
+            tke =(0.5*(uu+vv+ww))*Us*Us
         #add current autocorrelation to the ensemble
         if acfs is None:
             acfs = f_r
@@ -595,14 +614,31 @@ def main(files, Us: float, Ls: float, l0: float, fs: float):
 
 if __name__ == "__main__":
     import argparse
-    parser =  argparse.ArgumentParser(description="Turbulence analysis and statistics from nondimensional velocity timeseries")
+    parser =  argparse.ArgumentParser(description="Turbulence analysis and statistics of a velocity timeseries: A program to determine the Reynolds shear stresses, longitudinal (i.e. Vx) velocity"
+                                                  " autocorrelation function, macro and micro turbulence scales/parameters, and the longitudinal 1D energy specta plots from velocity time history data.")
 
     parser.add_argument('--files', nargs='*', help='filenames of the velocity timeseries with Time, Vx, Vy, Vz variables')
+
     parser.add_argument('--l0', type=float, help='Reference eddy length scale (i.e. vortex width) in m')
-    parser.add_argument('--Us', type=float, default=1.0, help='If files are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s. Us = 1 (i.e. dimensional) by default')
-    parser.add_argument('--Ls', type=float, default=1.0, help='If files are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
+    parser.add_argument('--Us', type=float, default=1.0, help='If velocities are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s. Us = 1 (i.e. dimensional) by default')
+    parser.add_argument('--Ls', type=float, default=1.0, help='If length scales are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
+    parser.add_argument('--Ts', type=float, default=1.0, help='If time values are nondimensional, provide reference length scale (i.e. model length) in m. Ts = 1 (i.e. dimensional) by default')
     parser.add_argument('--fs', type=float, default=1.0, help='A sampling rate if no time column is included in data files')
+
+    parser.add_argument('--delim', type=str, default=' ', help='Delimiter used for data file. Default is a "space" character.')
+    parser.add_argument('--vars', nargs=4,type=int, help='Variable ordering is assumed to be [Time, Vx, Vy, Vz]. If this is not true, provide the column number (with zero-based indexing) of the file'
+                                                         ' variable supplied in the same order listed above. Use -1 for variables not included.', default=[0,1,2,3],
+                                                         metavar=('Time Col#', 'Vx Col#' ,'Vy Col#', 'Vz Col#'))
+    parser.add_argument('--header',type=int,default=0, help='Line number (zero indexed) of the file header (i.e. line containing column/var names. Set to -1 if no header is included and set variable.'
+                                                            ' information based on -v/--vars flag, -c/--cols flag, or default variable list provided by the --vars flag.')
+
+    parser.add_argument('--RSS',nargs=5,help='By default, this code calculates and outputs the RSS values when provided data for each velocity component. If it is desired to only use this code'
+                                               ' to generate the 1D (i.e. U velocity) energy spectra and macro/micro scale results, you can provide missing RSS results so accurate model spectra'
+                                               ' RSS table values will be outputted. Isotropic conditions are assumed otherwise',
+                                               metavar=('vv', 'ww', 'uv', 'uw', 'vw'))
+
 
     args = parser.parse_args()
 
-    main(args.files, args.Us, args.Ls, args.l0,args.fs)
+    main(args.files, args.Us, args.Ls, args.Ts, args.l0, args.fs, args.delim, args.header, args.vars, args.RSS)
+        

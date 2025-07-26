@@ -5,6 +5,10 @@ example_data/
 #example_data/*.lay
 
 
+.DS_Store
+._.DS_Store
+
+
 
 #AUTO GENERATED BELOW
 # Byte-compiled / optimized / DLL files
