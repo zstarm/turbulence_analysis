@@ -1,1 +1,1 @@
-This code is not to be re-distributed anywhere and can only be used with the expressed approval of IIHR - Hydroscience & Engineering. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.
+Users of this software are not allowed re-distribut the files located in this repository anywhere. Furthermore, permitted usage of this software is only granted with the expressed approval of IIHR - Hydroscience & Engineering. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.

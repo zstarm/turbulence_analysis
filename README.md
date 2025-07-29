@@ -8,7 +8,7 @@
 
 ## User Agreement and Approval for Usage
 
-This code is not to be re-distributed anywhere and can only be used with the expressed approval of IIHR - Hydroscience & Engineering. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.
+Users of this software are not allowed re-distribute the files of this repository (including all subdirectories) anywhere. Furthermore, usage of this software is only granted with the expressed approval of IIHR - Hydroscience & Engineering. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.
  
 
 ## Description:

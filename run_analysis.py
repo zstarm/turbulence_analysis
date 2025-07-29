@@ -11,9 +11,9 @@
         1D energy spectra data. 
 
     Approval:
-        This is code is not to be re-distributed anywhere and can only be used with the expressed
-        approval of IIHR - Hydroscience & Engineering. Please contact Dr. Fred Stern (contact info
-        listed above) for approval to run this program. 
+        This is software and all corresponding files in this repository are not to be re-distributed anywhere. 
+        Furthermore, usage of this code must be granted by IIHR - Hydroscience & Engineering. Please contact 
+        Dr. Fred Stern (contact info listed above) for approval to run this software. 
 
 '''
 
