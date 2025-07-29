@@ -6,7 +6,7 @@
 	
   Last Updated: July 29, 2025
 
-## Approval for Usage
+## User Agreement and Approval for Usage
 
 This code is not to be re-distributed anywhere and can only be used with the expressed approval of IIHR - Hydroscience & Engineering. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.
  
