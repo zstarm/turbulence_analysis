@@ -1,7 +1,12 @@
 # Vortex Core Turbulence Analysis
 
 ### Written by Z. Starman 
- Contact Info: starman@uiowa.edu
+ Author's contact Info: starman@uiowa.edu
+ Additional PoC: frederick-stern@uiowa.edu
+
+ ## Usage Approval
+
+This code is not to be re-distributed anywhere and can be used with the approval of the IIHR - Hydroscience & Engineering's approval. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.
  
 ### July 17, 2025
 
