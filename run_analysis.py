@@ -1,3 +1,22 @@
+'''
+
+    VORTEX CORE TURBULENCE ANALYSIS CODE
+        Author: Z. Starman (starman@uiowa.edu)
+        PoC: Dr. Fred Stern (frederick-stern@uiowa.edu)
+
+    Description:
+        A program for extracting the turublence structure characteristics from velocity time
+        history data. This code outputs Reynolds shear stress results, macro and micro turbulence
+        scales, a longitudinal velocity (x velocity component) autocorrelation, and longitudinal
+        1D energy spectra data. 
+
+    Approval:
+        This is code is not to be re-distributed anywhere and can only be used with the expressed
+        approval of IIHR - Hydroscience & Engineering. Please contact Dr. Fred Stern (contact info
+        listed above) for approval to run this program. 
+
+'''
+
 from scipy import signal
 from scipy.integrate import trapezoid
 from scipy.fft import fft,fftfreq
@@ -9,11 +28,6 @@ import numpy as np
 import argparse
 from statsmodels.tsa.stattools import acf
 
-'''
-
-
-
-'''
 def get_FFTOfACF(acf: np.ndarray, fs=None):
     '''
         Performs the FFT of the autocorrelation function.
@@ -617,9 +631,9 @@ if __name__ == "__main__":
     parser =  argparse.ArgumentParser(description="Turbulence analysis and statistics of a velocity timeseries: A program to determine the Reynolds shear stresses, longitudinal (i.e. Vx) velocity"
                                                   " autocorrelation function, macro and micro turbulence scales/parameters, and the longitudinal 1D energy specta plots from velocity time history data.")
 
-    parser.add_argument('--files', nargs='*', help='filenames of the velocity timeseries with Time, Vx, Vy, Vz variables')
+    parser.add_argument('--files', nargs='*',required=True, help='filenames of the velocity timeseries with Time, Vx, Vy, Vz variables')
 
-    parser.add_argument('--l0', type=float, help='Reference eddy length scale (i.e. vortex width) in m')
+    parser.add_argument('--l0', type=float,required=True, help='Reference eddy length scale (i.e. vortex width) in m')
     parser.add_argument('--Us', type=float, default=1.0, help='If velocities are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s. Us = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ls', type=float, default=1.0, help='If length scales are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ts', type=float, default=1.0, help='If time values are nondimensional, provide reference length scale (i.e. model length) in m. Ts = 1 (i.e. dimensional) by default')

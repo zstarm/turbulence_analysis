@@ -1,14 +1,15 @@
 # Vortex Core Turbulence Analysis
 
 ### Written by Z. Starman 
- Author's contact Info: starman@uiowa.edu
- Additional PoC: frederick-stern@uiowa.edu
+  Author's contact Info: starman@uiowa.edu
+  Additional PoC: frederick-stern@uiowa.edu
+	
+  Last Updated: July 29, 2025
 
- ## Usage Approval
+## Approval for Usage
 
-This code is not to be re-distributed anywhere and can be used with the approval of the IIHR - Hydroscience & Engineering's approval. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.
+This code is not to be re-distributed anywhere and can only be used with the expressed approval of IIHR - Hydroscience & Engineering. Please contact Dr. Frederick Stern (frederick-stern@uiowa.edu) for approval.
  
-### July 17, 2025
 
 ## Description:
 A Python code for extracting turbulence characteristics from the velocity time history at a vortex core. This program is designed to output Reynolds shear stresses, longitudinal autocorrelation function, macro and micro scales, and 1D turbulent energy spectra data.
