@@ -657,7 +657,7 @@ if __name__ == "__main__":
 
     parser.add_argument('--files', nargs='*',required=True, help='filenames of the velocity timeseries with Time, Vx, Vy, Vz variables')
 
-    parser.add_argument('--l0', type=float,required=True, help='Reference eddy length scale (i.e. vortex width) in m')
+    parser.add_argument('--l0', type=float,required=True, help='Reference eddy length scale (i.e. vortex width) in nondimensional units relative to Ls')
     parser.add_argument('--Us', type=float, default=1.0, help='If velocities are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s. Us = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ls', type=float, default=1.0, help='If length scales are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ts', type=float, default=1.0, help='If time values are nondimensional, provide reference length scale (i.e. model length) in m. Ts = 1 (i.e. dimensional) by default')
