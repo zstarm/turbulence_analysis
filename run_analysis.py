@@ -109,7 +109,7 @@ def get_modelSpectra(tke:float,L:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKappa=
     integral_E11 = trapezoid(E11_model,x=k1)
     
     return k1,E11_model,integral_E11
-def get_kolmogorovScaling(k1,E11,tke,eps):
+def get_kolmogorovScaling(k1,E11,eps):
     nu = 1.1818e-6
     eta = ((nu**3)/eps)**(0.25)
     k1eta = eta*k1
@@ -117,6 +117,19 @@ def get_kolmogorovScaling(k1,E11,tke,eps):
     kolm = E11*(eps*(nu**5))**(-0.25)
 
     return k1eta,kolm
+
+def get_compensated(k1,E11,eps):
+    nu = 1.1818e-6
+    N = len(k1)
+    a = np.power(eps,-0.6667)
+    comp = np.empty(N)
+    for i in range(0,N):
+        comp[i] = E11[i]*a*(np.power(k1[i],5./3.))
+
+    eta = ((nu**3)/eps)**(0.25)
+    k1eta = eta*k1
+
+    return k1eta,comp
 
 def get_velStats(filename: str, sep, tpos=0,upos=1,vpos=2,wpos=3, header=0):
     '''
@@ -501,20 +514,31 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
 
     epsMac = (avg_rss[6]**(3/2)) / l0 #macroscale dissipation
     epsMic = 30 / ((avg_U*microscale)**2) * (avg_rss[0])*(1.1818e-6) 
-    k1eta, macKolmE11 = get_kolmogorovScaling(wavenumber,E11,avg_rss[6],epsMac)
-    k1eta, micKolmE11 = get_kolmogorovScaling(wavenumber,E11,avg_rss[6],epsMic)
-    k1etaMod, macKolmModE11 = get_kolmogorovScaling(k1,E11_model,avg_rss[6],epsMac)
-    k1etaMod, micKolmModE11 = get_kolmogorovScaling(k1,E11_model,avg_rss[6],epsMic)
+    k1etaM, macKolmE11 = get_kolmogorovScaling(wavenumber,E11,epsMac)
+    k1eta, micKolmE11 = get_kolmogorovScaling(wavenumber,E11,epsMic)
+    k1etaModM, macKolmModE11 = get_kolmogorovScaling(k1,E11_model,epsMac)
+    k1etaMod, micKolmModE11 = get_kolmogorovScaling(k1,E11_model,epsMic)
+
+    _,compMac = get_compensated(wavenumber,E11,epsMac)
+    _,compMic = get_compensated(wavenumber,E11,epsMic)
+    _,modCompMac = get_compensated(k1,E11_model,epsMac)
+    _,modCompMic = get_compensated(k1,E11_model,epsMic)
+
     
     fname = cf+"/ensemble_macro_kolmogorov.dat"
-    write_spectra(fname,k1eta,macKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+    write_spectra(fname,k1etaM,macKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
     fname = cf+"/ensemble_micro_kolmogorov.dat"
     write_spectra(fname,k1eta,micKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+    
+    fname = cf+"/ensemble_macro_comp.dat"
+    write_spectra(fname,k1etaM,compMac,'k1eta', 'E11*eps^-2/3*k1^5/3')
+    fname = cf+"/ensemble_micro_comp.dat"
+    write_spectra(fname,k1eta,compMic,'k1eta', 'E11*eps^-2/3*k1^5/3')
 
-    fname = cf+"/ensemble_macro_modelKolmogorov.dat"
-    write_spectra(fname,k1etaMod,macKolmModE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
-    fname = cf+"/ensemble_micro_modelKolmogorov.dat"
-    write_spectra(fname,k1etaMod,micKolmModE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+    fname = cf+"/ensemble_macro_modelComp.dat"
+    write_spectra(fname,k1etaModM,modCompMac,'k1eta', 'E11*eps^-2/3*k1^5/3')
+    fname = cf+"/ensemble_micro_modelComp.dat"
+    write_spectra(fname,k1etaMod,modCompMic,'k1eta', 'E11*eps^-2/3*k1^5/3')
 
 def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, header_line, col_info, provided_RSS=None): 
     '''
