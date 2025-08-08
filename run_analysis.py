@@ -28,6 +28,11 @@ import numpy as np
 import argparse
 from statsmodels.tsa.stattools import acf
 
+def delimiter_parser(arg):
+    if arg == '\\t':
+        return '\t'
+    return arg
+
 def get_FFTOfACF(acf: np.ndarray, fs=None):
     '''
         Performs the FFT of the autocorrelation function.
@@ -372,7 +377,7 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
             Ubar: mean core velocity
             uu: mean uu Reynolds stress (longitudinal direction of vortex)
             k: tke value
-            l0: vortex width characteristic length scale
+            l0: vortex half-width characteristic length scale
             micro/macroscale: Taylor micro and macroscale
             fname: output excel filename
     '''
@@ -657,13 +662,13 @@ if __name__ == "__main__":
 
     parser.add_argument('--files', nargs='*',required=True, help='filenames of the velocity timeseries with Time, Vx, Vy, Vz variables')
 
-    parser.add_argument('--l0', type=float,required=True, help='Reference eddy length scale (i.e. vortex width) in nondimensional units relative to Ls')
+    parser.add_argument('--l0', type=float,required=True, help='Reference eddy length scale (i.e. vortex radius) in nondimensional units relative to Ls')
     parser.add_argument('--Us', type=float, default=1.0, help='If velocities are nondimensional, provide reference velocity scale (i.e. Carriage Speed) in m/s. Us = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ls', type=float, default=1.0, help='If length scales are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ts', type=float, default=1.0, help='If time values are nondimensional, provide reference length scale (i.e. model length) in m. Ts = 1 (i.e. dimensional) by default')
     parser.add_argument('--fs', type=float, default=1.0, help='A sampling rate if no time column is included in data files')
 
-    parser.add_argument('--delim', type=str, default=' ', help='Delimiter used for data file. Default is a "space" character.')
+    parser.add_argument('--delim', type=delimiter_parser, default=' ', help='Delimiter used for data file. Default is a "space" character.')
     parser.add_argument('--vars', nargs=4,type=int, help='Variable ordering is assumed to be [Time, Vx, Vy, Vz]. If this is not true, provide the column number (with zero-based indexing) of the file'
                                                          ' variable supplied in the same order listed above. Use -1 for variables not included.', default=[0,1,2,3],
                                                          metavar=('Time Col#', 'Vx Col#' ,'Vy Col#', 'Vz Col#'))
@@ -677,6 +682,8 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
+
+    print(args.delim[0])
 
     main(args.files, args.Us, args.Ls, args.Ts, args.l0, args.fs, args.delim, args.header, args.vars, args.RSS)
         
