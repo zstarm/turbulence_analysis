@@ -604,7 +604,7 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
             vw = vw*Us*Us
             tke =tke*Us*Us
         else:
-            uu,_ = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
+            uu = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])[0]
             uu = uu*Us*Us
             vv = provided_RSS[0]*Us*Us
             ww = provided_RSS[1]*Us*Us
@@ -675,7 +675,7 @@ if __name__ == "__main__":
     parser.add_argument('--header',type=int,default=0, help='Line number (zero indexed) of the file header (i.e. line containing column/var names. Set to -1 if no header is included and set variable.'
                                                             ' information based on -v/--vars flag, -c/--cols flag, or default variable list provided by the --vars flag.')
 
-    parser.add_argument('--RSS',nargs=5,help='By default, this code calculates and outputs the RSS values when provided data for each velocity component. If it is desired to only use this code'
+    parser.add_argument('--RSS',type=float,nargs=5,help='By default, this code calculates and outputs the RSS values when provided data for each velocity component. If it is desired to only use this code'
                                                ' to generate the 1D (i.e. U velocity) energy spectra and macro/micro scale results, you can provide missing RSS results so accurate model spectra'
                                                ' RSS table values will be outputted. Isotropic conditions are assumed otherwise',
                                                metavar=('vv', 'ww', 'uv', 'uw', 'vw'))
@@ -683,7 +683,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    print(args.delim[0])
 
     main(args.files, args.Us, args.Ls, args.Ts, args.l0, args.fs, args.delim, args.header, args.vars, args.RSS)
         
