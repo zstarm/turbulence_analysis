@@ -20,7 +20,9 @@
 from scipy import signal
 from scipy.integrate import trapezoid
 from scipy.fft import fft,fftfreq
-from scipy.signal import hann,correlate
+#from scipy.signal import hann,correlate
+from scipy.signal import correlate
+from scipy.signal.windows import hann
 from scipy.integrate import quad
 import pandas as pd
 import os
