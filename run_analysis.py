@@ -30,6 +30,8 @@ import numpy as np
 import argparse
 from statsmodels.tsa.stattools import acf
 
+nu = 0.0
+
 def delimiter_parser(arg):
     if arg == '\\t':
         return '\t'
@@ -100,7 +102,7 @@ def get_modelSpectra(tke:float,L:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKappa=
 
 
     print(f"GENERATING MODEL SPECTRUM. THIS MAY TAKE A WHILE")
-    nu = 1.1818e-6   #assume typical viscosity of water (15 C)
+    #nu = 1.1818e-6   #assume typical viscosity of water (15 C)
     eps = (tke**(3/2)) / L
     eta = ((nu**3)/eps)**0.25
 
@@ -117,7 +119,7 @@ def get_modelSpectra(tke:float,L:float,CL=6.78,Ceta=0.4,startKappa=0.1,endKappa=
     
     return k1,E11_model,integral_E11
 def get_kolmogorovScaling(k1,E11,eps):
-    nu = 1.1818e-6
+    #nu = 1.1818e-6
     eta = ((nu**3)/eps)**(0.25)
     k1eta = eta*k1
 
@@ -126,7 +128,7 @@ def get_kolmogorovScaling(k1,E11,eps):
     return k1eta,kolm
 
 def get_compensated(k1,E11,eps):
-    nu = 1.1818e-6
+    #nu = 1.1818e-6
     N = len(k1)
     a = np.power(eps,-0.6667)
     comp = np.empty(N)
@@ -167,15 +169,26 @@ def get_velStats(filename: str, sep, tpos=0,upos=1,vpos=2,wpos=3, header=0):
         vel_components = [col_names[upos],col_names[vpos], col_names[wpos]]
 
     RSS = [None, None, None, None, None, None]
+    U = None
+    V = None
+    W = None
     print(f'GETTING MEAN VELOCITY STATISTICS OF: {filename}')
     for i in range(0,len(vel_components)):
         for j in range(i,len(vel_components)):
             u = vel_components[i]
             v = vel_components[j]
             mean_u = data[u].mean(axis=0)
+
             x = (data[u] - mean_u).to_numpy()
             sm = lambda a : np.mean(a**2)
             if(i == j):
+                if(i==0):
+                    U = mean_u
+                elif(i==1):
+                    V = mean_u
+                elif(i==2):
+                    W = mean_u
+
                 if(u == vel_components[0]):
                     if RSS[0] is None:
                         RSS[0] = sm(x)
@@ -225,11 +238,13 @@ def get_velStats(filename: str, sep, tpos=0,upos=1,vpos=2,wpos=3, header=0):
             if r is None:
                 if(index < 3 and index > 0):
                     RSS[index] = RSS[0] 
+                    V = 0.0
+                    W = 0.0
                 else:
                     RSS[index] = 0.0
 
     tke = 0.5*(RSS[0]+RSS[1]+RSS[2])
-    return RSS[0],RSS[1],RSS[2],RSS[3],RSS[4],RSS[5],tke
+    return RSS[0],RSS[1],RSS[2],RSS[3],RSS[4],RSS[5],tke,U,V,W
 
 def get_parabolaCoeffs(x_data,y_data):
     '''
@@ -303,10 +318,10 @@ def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=' '
         os._exit()
 
     f_r = f_r.reshape((-1,1))
-    return tau,f_r,mean_val
+    return tau,f_r
 
 
-def write_autocorr(filename: str, tau, fr, coeffs, tau_end=10, n= 50):
+def write_autocorr(filename: str, tau, fr, coeffs,label, tau_end=10, n= 50):
     ''' 
         Writes out the autocorrelation function using tecplot ascii point format.
         This is equvilant to a deliminted text file if the file header and zone 
@@ -336,15 +351,15 @@ def write_autocorr(filename: str, tau, fr, coeffs, tau_end=10, n= 50):
     with open(filename, 'w') as of:
         of.write("TITLE = \"Autocorrelation Function\"\n")
         of.write(f"VARIABLES = \"tau\", \"f(r)\", \"parabola(n_3)\",\"analytic\"\n")
-        of.write(f"ZONE T = \"Ensemble Avg. Autocorrelation\" I = {len(tau)}, PASSIVEVARLIST=[3,4]\n")
+        of.write(f"ZONE T = \"Ensemble Avg. Autocorrelation of {label}\" I = {len(tau)}, PASSIVEVARLIST=[3,4]\n")
         for i in range(0,len(tau)): 
            of.write(f"{tau[i]} {fr[i]}\n") 
-        of.write(f"ZONE T = \"Parbolic Fit of First 3 Points\" I = {n}, PASSIVEVARLIST=[2]\n")
+        of.write(f"ZONE T = \"Parbolic Fit of First 3 Points of {label}\" I = {n}, PASSIVEVARLIST=[2]\n")
         for i in range(0,n): 
            of.write(f"{x[i]} {y[i]} {analytic[i]}\n") 
         of.close()
 
-def write_spectra(filename: str, f: np.ndarray, Y: np.ndarray, fname: str, Yname: str):
+def write_spectra(filename: str, f: np.ndarray, Y: np.ndarray, fname: str, Yname: str,label):
     '''
         Writes out a tecplot ascii point formatted data filea
         of a spectrum in frequency/wavenumber domain. This can 
@@ -365,7 +380,7 @@ def write_spectra(filename: str, f: np.ndarray, Y: np.ndarray, fname: str, Yname
     with open(filename, 'w') as of:
         of.write(f"TITLE = \"{Yname} Spectrum\"\n")
         of.write(f"VARIABLES = \"{fname}\", \"{Yname}\"\n")
-        of.write(f"ZONE T = \"Ensemble Avg. {Yname}\" I = {len(f)}\n")
+        of.write(f"ZONE T = \"Ensemble Avg. {Yname} of {label}\" I = {len(f)}\n")
         for i in range(0,len(f)): 
            of.write(f"{f[i]} {Y[i]}\n") 
         of.close()
@@ -384,7 +399,7 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
             fname: output excel filename
     '''
 
-    nu = 1.1818e-6   #assume typical viscosity of water (15 C)
+    #nu = 1.1818e-6   #assume typical viscosity of water (15 C)
 
     fU = '<U>'
     fuu = f'<u\N{SUPERSCRIPT TWO}>'
@@ -460,12 +475,29 @@ def write_rss2excel(avg_rss,fname):
     with pd.ExcelWriter(fname, engine= 'openpyxl', mode='a') as exWriter:
         rss_df.to_excel(exWriter, sheet_name='RSS')
 
-def write_reportExcel(U, avg_rss, l0, microscale, macroscale, cf):
+def write_meanVel2excel(U,V,W,fname):
+    '''
+        Writes out table of RSS values to excel file
+        Args
+            avg_rss: 2D array of the ensemble averaged RSS components and tke
+            fname: output excel filename
+    '''
+    
+    U_row_names = ['U','V','W']
+    U_data = { 'Value' : [U,V,W], 'Units' : ['m/s','m/s','m/s']}
+
+    U_df = pd.DataFrame(U_data, index=U_row_names)
+    
+    with pd.ExcelWriter(fname, engine= 'openpyxl', mode='a') as exWriter:
+        U_df.to_excel(exWriter,sheet_name='Mean Velocity')
+
+def write_reportExcel(U,V,W,avg_rss, l0, microscale, macroscale, cf):
     write_scales2Excel(U,avg_rss[0],avg_rss[-1],l0,microscale,macroscale, cf)
     write_rss2excel(avg_rss, cf)
+    write_meanVel2excel(U,V,W,cf)
     
 
-def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: float, l0: float, cf):
+def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, Vbar:float, Wbar:float, rss: float, l0: float, cf):
     '''
         Processes the ensemble of data results if there are multiple realizations/files
         of the same case
@@ -481,24 +513,26 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
 
     avg_acf = acfs.mean(axis=1)
     avg_U = Ubar.mean()
+    avg_V = Vbar.mean()
+    avg_W = Wbar.mean()
     avg_rss = rss.mean(axis=1)
 
     
     freq, RE = get_FFTOfACF(avg_acf, fs=1/(tau[1]-tau[0]))
     fname = cf+"/ensemble_RE.dat"
-    write_spectra(fname,freq,RE,'freq (Hz)', 'RE (s)')
+    write_spectra(fname,freq,RE,'freq (Hz)', 'RE (s)',os.path.basename(os.path.normpath(cf)))
     fname = cf+"/ensemble_E11hat.dat"
     E11hat = RE*2.*avg_rss[0]
-    write_spectra(fname,freq,E11hat,'freq (Hz)', 'E11_hat (m^2/s)')
+    write_spectra(fname,freq,E11hat,'freq (Hz)', 'E11_hat (m^2/s)',os.path.basename(os.path.normpath(cf)))
     fname = cf+"/ensemble_E11.dat"
     wavenumber = freq*2.*np.pi / avg_U
     E11 = E11hat*avg_U / (2.*np.pi)
-    write_spectra(fname,wavenumber,E11,'kappa (1/m)', 'E11 (m^3/s^2)')
+    write_spectra(fname,wavenumber,E11,'kappa (1/m)', 'E11 (m^3/s^2)',os.path.basename(os.path.normpath(cf)))
 
     # Fitting a parabola around f(r=0), 3pt fit (function is symmetric)
     coeffs = get_parabolaCoeffs(np.array([-1*tau[1], tau[0], tau[1]]), np.array([avg_acf[1],avg_acf[0],avg_acf[1]]))
     fname = cf+"/ensemble_autocorrelation.dat"
-    write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=75,tau_end=40) 
+    write_autocorr(fname, tau=tau, fr=avg_acf, coeffs=coeffs, n=75,tau_end=40,label=os.path.basename(os.path.normpath(cf))) 
 
     microscale = np.roots(coeffs)[0]
     zerocrossing = np.where(np.diff(np.sign(avg_acf)))[0][0]  #get first zero crossing index
@@ -512,12 +546,12 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
     macroscale=macroscale+area
 
     excelName = cf+"/ensemble_turbulence_table_report.xlsx"
-    write_reportExcel(avg_U, avg_rss, l0, microscale, macroscale,excelName)
+    write_reportExcel(avg_U,avg_V,avg_W,avg_rss, l0, microscale, macroscale,excelName)
 
     k1,E11_model,intE11 = get_modelSpectra(avg_rss[-1],l0)
     print(f"\tOutputting the integral of E11 over uu: {intE11/avg_rss[0]}")
     fname = cf+"/ensemble_modelE11.dat"
-    write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Model E11 (m^3/s^2)')
+    write_spectra(fname,k1,E11_model,'k1 (1/m)', 'Model E11 (m^3/s^2)',os.path.basename(os.path.normpath(cf)))
 
     epsMac = (avg_rss[6]**(3/2)) / l0 #macroscale dissipation
     epsMic = 30 / ((avg_U*microscale)**2) * (avg_rss[0])*(1.1818e-6) 
@@ -533,19 +567,24 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, rss: fl
 
     
     fname = cf+"/ensemble_macro_kolmogorov.dat"
-    write_spectra(fname,k1etaM,macKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+    write_spectra(fname,k1etaM,macKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4',os.path.basename(os.path.normpath(cf)))
     fname = cf+"/ensemble_micro_kolmogorov.dat"
-    write_spectra(fname,k1eta,micKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4')
+    write_spectra(fname,k1eta,micKolmE11,'k1eta', 'E11*(nu^5*eps)^-1/4',os.path.basename(os.path.normpath(cf)))
     
+    fname = cf+"/ensemble_macro_modelKolm.dat"
+    write_spectra(fname,k1etaModM,macKolmModE11,'k1eta', 'E11*(nu^5*eps)^-1/4',os.path.basename(os.path.normpath(cf)))
+    fname = cf+"/ensemble_micro_modelKolm.dat"
+    write_spectra(fname,k1etaMod,micKolmModE11,'k1eta', 'E11*(nu^5*eps)^-1/4',os.path.basename(os.path.normpath(cf)))
+
     fname = cf+"/ensemble_macro_comp.dat"
-    write_spectra(fname,k1etaM,compMac,'k1eta', 'E11*eps^-2/3*k1^5/3')
+    write_spectra(fname,k1etaM,compMac,'k1eta', 'E11*eps^-2/3*k1^5/3',os.path.basename(os.path.normpath(cf)))
     fname = cf+"/ensemble_micro_comp.dat"
-    write_spectra(fname,k1eta,compMic,'k1eta', 'E11*eps^-2/3*k1^5/3')
+    write_spectra(fname,k1eta,compMic,'k1eta', 'E11*eps^-2/3*k1^5/3',os.path.basename(os.path.normpath(cf)))
 
     fname = cf+"/ensemble_macro_modelComp.dat"
-    write_spectra(fname,k1etaModM,modCompMac,'k1eta', 'E11*eps^-2/3*k1^5/3')
+    write_spectra(fname,k1etaModM,modCompMac,'k1eta', 'E11*eps^-2/3*k1^5/3',os.path.basename(os.path.normpath(cf)))
     fname = cf+"/ensemble_micro_modelComp.dat"
-    write_spectra(fname,k1etaMod,modCompMic,'k1eta', 'E11*eps^-2/3*k1^5/3')
+    write_spectra(fname,k1etaMod,modCompMic,'k1eta', 'E11*eps^-2/3*k1^5/3',os.path.basename(os.path.normpath(cf)))
 
 def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, header_line, col_info, provided_RSS=None): 
     '''
@@ -561,7 +600,9 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
     current_count = 0
     current_folder = None
     acfs = None
+    meanU = None
     meanV = None
+    meanW = None
     meanRSS = None
     tau = None
 
@@ -576,11 +617,13 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
 
             print("STATUS: Finished analysis for all files in directiory \"", current_folder,"\"")
             print("Number of datafiles used = ", current_count)
-            process_ensembleData(acfs, tau, meanV, meanRSS,l0, current_folder)
+            process_ensembleData(acfs, tau, meanU,meanV,meanW,meanRSS,l0, current_folder)
 
             #reset ensemble variables to be used for the next folder
             acfs = None
+            meanU = None
             meanV = None
+            meanW = None
             meanRSS = None
             current_count = 0
             current_folder = head
@@ -588,16 +631,15 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
         if(current_folder == None):
             current_folder = head
 
-        tau, f_r, Ubar = get_autocorr(f, col_info[1], time=col_info[0], sep=delim,fs=fs) 
+        tau, f_r = get_autocorr(f, col_info[1], time=col_info[0], sep=delim,fs=fs) 
         #if(tau is None):
         #    print(f"TIME VARIABLE NOT PROVIDED...Deducing time lags using sampling rate")
         #    tau = np.linspace(0,fs*len(f_r),len(f_r))
         tau = tau*Ts
         
 
-        Ubar = Ubar*Us
         if(provided_RSS is None):
-            uu,vv,ww,uv,uw,vw,tke = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
+            uu,vv,ww,uv,uw,vw,tke,Ubar,Vbar,Wbar = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
             uu = uu*Us*Us
             vv = vv*Us*Us
             ww = ww*Us*Us
@@ -605,8 +647,11 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
             uw = uw*Us*Us
             vw = vw*Us*Us
             tke =tke*Us*Us
+            Ubar = Ubar*Us
+            Vbar = Vbar*Us
+            Wbar = Wbar*Us
         else:
-            uu = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])[0]
+            uu,_,_,_,_,_,_,Ubar,Vbar,Wbar = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
             uu = uu*Us*Us
             vv = provided_RSS[0]*Us*Us
             ww = provided_RSS[1]*Us*Us
@@ -614,11 +659,18 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
             uw = provided_RSS[3]*Us*Us
             vw = provided_RSS[4]*Us*Us
             tke =(0.5*(uu+vv+ww))*Us*Us
+            Ubar = Ubar*Us
+            Vbar = Vbar*Us
+            Wbar = Wbar*Us
         #add current autocorrelation to the ensemble
         if acfs is None:
             acfs = f_r
+            meanU = np.empty(1)
             meanV = np.empty(1)
-            meanV[0] = Ubar
+            meanW = np.empty(1)
+            meanU[0] = Ubar
+            meanV[0] = Vbar
+            meanW[0] = Wbar
             meanRSS = np.empty((7,1))
             meanRSS[0] = uu
             meanRSS[1] = vv
@@ -641,7 +693,9 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
                     tau = tau[0:newSize]
 
             acfs = np.concatenate((acfs,f_r), axis=1)
-            meanV = np.concatenate((meanV,np.array([Ubar])), axis=0)
+            meanU = np.concatenate((meanU,np.array([Ubar])), axis=0)
+            meanV = np.concatenate((meanV,np.array([Vbar])), axis=0)
+            meanW = np.concatenate((meanW,np.array([Wbar])), axis=0)
             newRSS = np.array([uu,vv,ww,uv,uw,vw,tke]).reshape(7,1)
             meanRSS = np.concatenate((meanRSS,newRSS),axis=1)
 
@@ -654,7 +708,7 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
         print("STATUS: Finished analysis for all files in directiory \"", current_folder,"\"")
         print("\tNumber of datafiles used = ", current_count)
         
-        process_ensembleData(acfs, tau, meanV, meanRSS,l0,current_folder)
+        process_ensembleData(acfs, tau, meanU, meanV,meanW, meanRSS,l0,current_folder)
 
 
 if __name__ == "__main__":
@@ -669,6 +723,8 @@ if __name__ == "__main__":
     parser.add_argument('--Ls', type=float, default=1.0, help='If length scales are nondimensional, provide reference length scale (i.e. model length) in m. Ls = 1 (i.e. dimensional) by default')
     parser.add_argument('--Ts', type=float, default=1.0, help='If time values are nondimensional, provide reference length scale (i.e. model length) in m. Ts = 1 (i.e. dimensional) by default')
     parser.add_argument('--fs', type=float, default=1.0, help='A sampling rate if no time column is included in data files')
+    
+    parser.add_argument('--nu', type=float, default=1.1818e-6, help='kinematic viscosity of water value')
 
     parser.add_argument('--delim', type=delimiter_parser, default=' ', help='Delimiter used for data file. Default is a "space" character.')
     parser.add_argument('--vars', nargs=4,type=int, help='Variable ordering is assumed to be [Time, Vx, Vy, Vz]. If this is not true, provide the column number (with zero-based indexing) of the file'
@@ -685,6 +741,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+
+    nu = args.nu
 
     main(args.files, args.Us, args.Ls, args.Ts, args.l0, args.fs, args.delim, args.header, args.vars, args.RSS)
         
