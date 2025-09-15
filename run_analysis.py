@@ -442,7 +442,7 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
 
     #SHEET 2 - MICROSCALES
 
-    Re_lambda = microscale / np.sqrt(2) * uprime / nu
+    Re_lambda = Ubar*microscale / np.sqrt(2) * uprime / nu
     eps_micro = 30 / ((Ubar*microscale)**2) * (uprime**2) * nu
     eta = ((nu**3) / eps_micro)**(0.25)
     
