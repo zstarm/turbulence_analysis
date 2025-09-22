@@ -731,10 +731,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--delim', type=delimiter_parser, default=' ', help='Delimiter used for data file. Default is a "space" character.')
     parser.add_argument('--vars', nargs=4,type=int, help='Variable ordering is assumed to be [Time, Vx, Vy, Vz]. If this is not true, provide the column number (with zero-based indexing) of the file'
-                                                         ' variable supplied in the same order listed above. Use -1 for variables not included.', default=[0,1,2,3],
+                                                         ' variables supplied in the same order listed above. Use -1 for variables not included.', default=[0,1,2,3],
                                                          metavar=('Time Col#', 'Vx Col#' ,'Vy Col#', 'Vz Col#'))
-    parser.add_argument('--header',type=int,default=0, help='Line number (zero indexed) of the file header (i.e. line containing column/var names. Set to -1 if no header is included and set variable.'
-                                                            ' information based on -v/--vars flag, -c/--cols flag, or default variable list provided by the --vars flag.')
+    parser.add_argument('--header',type=int,default=0, help='Line number (zero indexed) of the file header (i.e. line containing column/var names. Set to -1 if no header is included and set variable'
+                                                            ' information using --vars flag (or confirm default variable list ordering of the --vars flag)')
 
     parser.add_argument('--RSS',type=float,nargs=5,help='By default, this code calculates and outputs the RSS values when provided data for each velocity component. If it is desired to only use this code'
                                                ' to generate the 1D (i.e. U velocity) energy spectra and macro/micro scale results, you can provide missing RSS results so accurate model spectra'
