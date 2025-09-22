@@ -274,7 +274,7 @@ def parabola(x,a,b,c):
     '''
     return a*x**2 + b*x + c
 
-def get_autocorr(filename: str, var: str, fft=False, time=None, fs=None, sep=' ',header=0):
+def get_autocorr(filename: str, var, fft=False, time=None, fs=None, sep=' ',header=0):
     '''
         This function performs the autocorrelation given a 
         timeseries of a specified variable.
@@ -597,6 +597,9 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
     '''
     print("MAIN() CALLED")
 
+    if(header_line < 0):
+        header_line = None
+
     current_count = 0
     current_folder = None
     acfs = None
@@ -631,7 +634,7 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
         if(current_folder == None):
             current_folder = head
 
-        tau, f_r = get_autocorr(f, col_info[1], time=col_info[0], sep=delim,fs=fs) 
+        tau, f_r = get_autocorr(f, col_info[1], time=col_info[0], sep=delim,fs=fs,header=header_line) 
         #if(tau is None):
         #    print(f"TIME VARIABLE NOT PROVIDED...Deducing time lags using sampling rate")
         #    tau = np.linspace(0,fs*len(f_r),len(f_r))
@@ -639,7 +642,7 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
         
 
         if(provided_RSS is None):
-            uu,vv,ww,uv,uw,vw,tke,Ubar,Vbar,Wbar = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
+            uu,vv,ww,uv,uw,vw,tke,Ubar,Vbar,Wbar = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3],header=header_line)
             uu = uu*Us*Us
             vv = vv*Us*Us
             ww = ww*Us*Us
@@ -651,7 +654,7 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
             Vbar = Vbar*Us
             Wbar = Wbar*Us
         else:
-            uu,_,_,_,_,_,_,Ubar,Vbar,Wbar = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3])
+            uu,_,_,_,_,_,_,Ubar,Vbar,Wbar = get_velStats(f,delim,tpos=col_info[0],upos=col_info[1],vpos=col_info[2],wpos=col_info[3],header=header_line)
             uu = uu*Us*Us
             vv = provided_RSS[0]*Us*Us
             ww = provided_RSS[1]*Us*Us
