@@ -35,6 +35,9 @@ nu = 0.0
 def delimiter_parser(arg):
     if arg == '\\t':
         return '\t'
+    elif arg == "\\s+" or arg.lower() == "fixed" or arg.lower() == "fixed-width" or arg.lower() == "fixed width":
+        return r"\s+"
+
     return arg
 
 def get_FFTOfACF(acf: np.ndarray, fs=None):
@@ -154,7 +157,10 @@ def get_velStats(filename: str, sep, tpos=0,upos=1,vpos=2,wpos=3, header=0):
     '''
         
     print(f'READING DATASET: {filename}')
-    data = pd.read_csv(filename, sep=sep,header=header)
+    if(sep == "fixed"):
+        data = pd.read_csv(filename,header=header, delim_whitespace=True)
+    else:
+        data = pd.read_csv(filename, sep=sep,header=header)
     col_names = data.columns.tolist()
     vel_components = []
     if(len(col_names) < 4):
@@ -287,7 +293,10 @@ def get_autocorr(filename: str, var, fft=False, time=None, fs=None, sep=' ',head
             sep: delimiter option
     '''
 
-    data = pd.read_csv(filename, sep=sep, header =header)
+    if(sep == "fixed"):
+        data = pd.read_csv(filename,header=header, delim_whitespace=True)
+    else:
+        data = pd.read_csv(filename, sep=sep,header=header)
     col_names = data.columns.tolist()
     if(isinstance(var,int)):
         ivar = col_names[var]
@@ -442,12 +451,12 @@ def write_scales2Excel(Ubar, uu, k, l0, microscale, macroscale,fname):
 
     #SHEET 2 - MICROSCALES
 
-    Re_lambda = Ubar*microscale / np.sqrt(2) * uprime / nu
-    eps_micro = 30 / ((Ubar*microscale)**2) * (uprime**2) * nu
+    Re_lambda = np.abs(Ubar)*microscale / np.sqrt(2) * uprime / nu
+    eps_micro = 30 / ((np.abs(Ubar)*microscale)**2) * (uprime**2) * nu
     eta = ((nu**3) / eps_micro)**(0.25)
     
     sheet2_row_names = [ftauE,fT,flambdaf, fclambdaf, fReLambda, feps, feta] 
-    sheet2_data = { 'Value' : [microscale, macroscale,Ubar*microscale, Ubar*macroscale, Re_lambda, eps_micro, eta] , 'Units' : ['s','s','m', 'm', '-', 'm^2/s^3', 'm'],
+    sheet2_data = { 'Value' : [microscale, macroscale,np.abs(Ubar)*microscale, np.abs(Ubar)*macroscale, Re_lambda, eps_micro, eta] , 'Units' : ['s','s','m', 'm', '-', 'm^2/s^3', 'm'],
                     'Method/Notes' : ['Parabola Root', 'Trapezoidal Integration','Taylor Frozen Turbulence Hypothesis', 'Taylor Frozen Turbulence Hypothesis', 'Microscale Re', 
                     'Dissipation based on microscales', 'Kolmogorov length scale' ]}
     
@@ -525,8 +534,8 @@ def process_ensembleData(acfs: np.ndarray, tau: np.ndarray, Ubar: float, Vbar:fl
     E11hat = RE*2.*avg_rss[0]
     write_spectra(fname,freq,E11hat,'freq (Hz)', 'E11_hat (m^2/s)',os.path.basename(os.path.normpath(cf)))
     fname = cf+"/ensemble_E11.dat"
-    wavenumber = freq*2.*np.pi / avg_U
-    E11 = E11hat*avg_U / (2.*np.pi)
+    wavenumber = freq*2.*np.pi / np.abs(avg_U)
+    E11 = E11hat*np.abs(avg_U) / (2.*np.pi)
     write_spectra(fname,wavenumber,E11,'kappa (1/m)', 'E11 (m^3/s^2)',os.path.basename(os.path.normpath(cf)))
 
     # Fitting a parabola around f(r=0), 3pt fit (function is symmetric)
@@ -665,6 +674,7 @@ def main(files, Us: float, Ls: float, Ts: float, l0: float, fs: float, delim, he
             Ubar = Ubar*Us
             Vbar = Vbar*Us
             Wbar = Wbar*Us
+
         #add current autocorrelation to the ensemble
         if acfs is None:
             acfs = f_r
@@ -729,7 +739,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--nu', type=float, default=1.1818e-6, help='kinematic viscosity of water value')
 
-    parser.add_argument('--delim', type=delimiter_parser, default=' ', help='Delimiter used for data file. Default is a "space" character.')
+    parser.add_argument('--delim', type=delimiter_parser, default=' ', help='Delimiter used for data file. Default is a "space" character. Type "fixed" for a fixed-width format to delimit by whitespace')
     parser.add_argument('--vars', nargs=4,type=int, help='Variable ordering is assumed to be [Time, Vx, Vy, Vz]. If this is not true, provide the column number (with zero-based indexing) of the file'
                                                          ' variables supplied in the same order listed above. Use -1 for variables not included.', default=[0,1,2,3],
                                                          metavar=('Time Col#', 'Vx Col#' ,'Vy Col#', 'Vz Col#'))
@@ -743,7 +753,6 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
-
 
     nu = args.nu
 
